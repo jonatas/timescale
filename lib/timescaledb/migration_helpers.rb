@@ -114,16 +114,18 @@ module Timescaledb
       create_continuous_aggregate_policy(table_name, **(options[:refresh_policies] || {}))
     end
 
+    alias_method :create_continuous_aggregates, :create_continuous_aggregate
+
     #  Drop a new continuous aggregate.
     #
     #  It basically DROP MATERIALIZED VIEW for a given @name.
     #
     # @param name [String, Symbol] The name of the continuous aggregate view.
-    def drop_continuous_aggregates view_name
+    def drop_continuous_aggregate view_name
       execute "DROP MATERIALIZED VIEW #{view_name}"
     end
 
-    alias_method :create_continuous_aggregates, :create_continuous_aggregate
+    alias_method :drop_continuous_aggregates, :drop_continuous_aggregate
 
     def create_continuous_aggregate_policy(table_name, **options)
       return if options.empty?

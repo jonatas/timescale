@@ -52,7 +52,7 @@ RSpec.describe Timescaledb::MigrationHelpers, database_cleaner_strategy: :trunca
     end
   end
 
-  describe ".create_caggs" do
+  describe ".create_continuous_aggregate" do
     let(:con) { ActiveRecord::Base.connection }
 
     before(:each) do
@@ -63,10 +63,6 @@ RSpec.describe Timescaledb::MigrationHelpers, database_cleaner_strategy: :trunca
         t.integer :volume
         t.timestamps
       end
-    end
-
-    after(:each) do
-      con.drop_continuous_aggregates(:ohlc_1m)
     end
 
     let(:hypertable_options) do
@@ -101,7 +97,37 @@ RSpec.describe Timescaledb::MigrationHelpers, database_cleaner_strategy: :trunca
       {with_data: true}
     end
 
+    let(:method) { :create_continuous_aggregate }
+    let(:migration) do
+      Class.new(ActiveRecord::Migration::Current) do
+        def initialize(method, query, options)
+          @method, @query, @options = method, query, options
+        end
+        def change
+          send(@method, 'ohlc_1m', @query, **@options)
+        end
+      end.new(method, query, options)
+    end
+
     subject(:create_caggs) { con.create_continuous_aggregates('ohlc_1m', query, **options) }
+
+
+    it 'is reversible' do
+      expect(con).to receive(:create_continuous_aggregate).once.and_call_original
+      expect(con).to receive(:drop_continuous_aggregate).once.and_call_original
+      migration.migrate(:up)
+      migration.migrate(:down)
+    end
+
+    describe '.create_continuous_aggregates' do
+      let(:method) { :create_continuous_aggregates }
+      it 'is reversible' do
+        expect(con).to receive(:create_continuous_aggregates).once.and_call_original
+        expect(con).to receive(:drop_continuous_aggregate).once.and_call_original
+        migration.migrate(:up)
+        migration.migrate(:down)
+      end
+    end
 
     specify do
       expect do

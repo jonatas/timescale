@@ -18,6 +18,7 @@ require_relative 'timescaledb/schema_dumper'
 require_relative 'timescaledb/stats'
 require_relative 'timescaledb/stats_report'
 require_relative 'timescaledb/migration_helpers'
+require_relative 'timescaledb/command_recorder'
 require_relative 'timescaledb/extension'
 require_relative 'timescaledb/version'
 
