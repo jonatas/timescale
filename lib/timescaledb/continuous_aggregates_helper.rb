@@ -136,34 +136,47 @@ module Timescaledb
             class_name = "#{aggregate_name}_per_#{timeframe}".classify
             const_set(class_name, Class.new(base_model) do
               class << self
-                attr_accessor :config, :timeframe, :base_query, :base_model
+                attr_accessor :config, :timeframe, :base_query, :base_model, :previous_timeframe, :interval, :aggregate_name, :prev_klass
               end
 
               self.table_name = _table_name
               self.config = config
               self.timeframe = timeframe
+              self.previous_timeframe = previous_timeframe
+              self.aggregate_name = aggregate_name
 
-              interval = "'1 #{timeframe.to_s}'"
+              self.interval = "'1 #{timeframe.to_s}'"
               self.base_model = base_model
-              tb = "time_bucket(#{interval}, #{time_column})"
-              if previous_timeframe
-                prev_klass = base_model.const_get("#{aggregate_name}_per_#{previous_timeframe}".classify)
-                select_clause = base_model.apply_rollup_rules("#{config[:select]}")
-                # Note there's no where clause here, because we're using the previous timeframe's data
-                self.base_query = "SELECT #{tb} as #{time_column}, #{select_clause} FROM \"#{prev_klass.table_name}\" GROUP BY #{[tb, *config[:group_by]].join(', ')}"
-              else
-                scope = base_model.public_send(config[:scope_name])
-                config[:select] = scope.select_values.select{|e|!e.downcase.start_with?("time_bucket")}.join(', ')
-                config[:group_by] = scope.group_values
-                config[:where] = if scope.where_values_hash.present?
-                  scope.where_values_hash.to_sql
-                  elsif scope.where_clause.ast.present? && scope.where_clause.ast.to_sql.present?
-                  scope.where_clause.ast.to_sql
+
+              def self.prev_klass
+                base_model.const_get("#{aggregate_name}_per_#{previous_timeframe}".classify)
+              end
+
+              def self.base_query
+                @base_query ||= begin
+                  tb = "time_bucket(#{interval}, #{time_column})"
+                  if previous_timeframe
+                    select_clause = base_model.apply_rollup_rules("#{config[:select]}")
+                    # Note there's no where clause here, because we're using the previous timeframe's data
+                    "SELECT #{tb} as #{time_column}, #{select_clause} FROM \"#{prev_klass.table_name}\" GROUP BY #{[tb, *config[:group_by]].join(', ')}"
+                  else
+                    scope = base_model.public_send(config[:scope_name])
+                    config[:select] = scope.select_values.select{|e|!e.downcase.start_with?("time_bucket")}.join(', ')
+                    config[:group_by] = scope.group_values
+                    config[:where] =
+                      if scope.where_values_hash.present?
+                        scope.where_values_hash.map { |key, value| "#{key} = '#{value}'" }.join(' AND ')
+                      elsif scope.where_clause.ast.present? && scope.where_clause.ast.to_sql.present?
+                        scope.where_clause.ast.to_sql
+                      end
+
+                    sql = "SELECT #{tb} as #{time_column}, #{config[:select]}"
+                    sql += " FROM \"#{base_model.table_name}\""
+                    sql += " WHERE #{config[:where]}" if config[:where]
+                    sql += " GROUP BY #{[tb, *config[:group_by]].join(', ')}"
+                    sql
+                  end
                 end
-                self.base_query = "SELECT #{tb} as #{time_column}, #{config[:select]}"
-                self.base_query += " FROM \"#{base_model.table_name}\""
-                self.base_query += " WHERE #{config[:where]}" if config[:where]
-                self.base_query += " GROUP BY #{[tb, *config[:group_by]].join(', ')}"
               end
 
               def self.refresh!(start_time = nil, end_time = nil)

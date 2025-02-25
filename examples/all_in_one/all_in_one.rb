@@ -12,24 +12,6 @@ require 'pry'
 # ruby all_in_one.rb postgres://user:pass@host:port/db_name
 ActiveRecord::Base.establish_connection( ARGV.last)
 
-# Setup Hypertable as in a migration
-ActiveRecord::Base.connection.instance_exec do
-  ActiveRecord::Base.logger = Logger.new(STDOUT)
-
-  drop_table(:events, if_exists: true, cascade: true)
-
-  hypertable_options = {
-    time_column: 'time',
-    chunk_time_interval: '1 day',
-  }
-
-  create_table(:events, id: false, hypertable: hypertable_options) do |t|
-    t.timestamptz :time, null: false, default: -> { 'now()' }
-    t.string :identifier, null: false
-    t.jsonb :payload
-  end
-end
-
 # Simple example
 class Event < ActiveRecord::Base
   extend Timescaledb::ActsAsHypertable
@@ -42,10 +24,10 @@ class Event < ActiveRecord::Base
   scope :count_clicks, -> { select("count(*)").where(identifier: "click") }
   scope :count_views, -> { select("count(*)").where(identifier: "views") }
   scope :purchase, -> { where(identifier: "purchase") }
-
   scope :purchase_stats, -> { purchase.select("stats_agg(#{value_column}) as stats_agg") }
 
   scope :stats, -> { select("average(stats_agg), stddev(stats_agg)") } # just for descendants aggregated classes
+
 
   continuous_aggregates scopes: [:count_clicks, :count_views, :purchase_stats],
     timeframes: [:minute, :hour, :day],
@@ -67,6 +49,29 @@ class Event < ActiveRecord::Base
       }
     }
 end
+
+# Setup Hypertable as in a migration
+ActiveRecord::Base.connection.instance_exec do
+  ActiveRecord::Base.logger = Logger.new(STDOUT)
+
+  Event.drop_continuous_aggregates
+  drop_table(:events, if_exists: true, cascade: true)
+
+  hypertable_options = {
+    time_column: 'time',
+    chunk_time_interval: '1 day',
+    compress_after: '7 days',
+    compress_orderby: 'time',
+    compress_segmentby: 'identifier',
+  }
+
+  create_table(:events, id: false, hypertable: hypertable_options) do |t|
+    t.timestamptz :time, null: false, default: -> { 'now()' }
+    t.string :identifier, null: false
+    t.jsonb :payload
+  end
+end
+
 
 ActiveRecord::Base.connection.instance_exec do
   Event.create_continuous_aggregates

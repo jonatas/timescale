@@ -254,6 +254,39 @@ the schema dumper included with Scenic can't dump a complete definition.
 This gem automatically configures Scenic to use a `Timescaledb::Scenic::Adapter`
 which will correctly handle schema dumping.
 
+### Compression policy
+
+Compression policy is used to compress data in a hypertable. You can enable the compression policy for a hypertable by using the `add_compression_policy` function.
+
+```ruby
+class AddCompressionPolicy < ActiveRecord::Migration[7.0]
+  def up
+    add_compression_policy('events', INTERVAL '7 days')
+  end
+
+  def down
+    remove_compression_policy('events')
+  end
+end
+```
+
+### Retention policy
+
+Retention policy is used to delete data (entire partitions) from a hypertable after a certain period of time.
+You can enable the retention policy for a hypertable by using the `add_retention_policy` function.
+
+```ruby
+class AddRetentionPolicy < ActiveRecord::Migration[7.0]
+  def up
+    add_retention_policy('events', INTERVAL '6 months')
+  end
+
+  def down
+    remove_retention_policy('events')
+  end
+end
+```
+
 ### Chunks
 
 To get all the chunks from a model's hypertable, you can use `.chunks`.
@@ -419,6 +452,8 @@ end
 ## More resources
 
 If you want to learn more about TimescaleDB with Ruby code, you can check the [examples](examples) folder and videos below:
+
+- The [all in one](examples/all_in_one) shows a complete example of how to use the gem.
 
 ### Toolkit examples
 

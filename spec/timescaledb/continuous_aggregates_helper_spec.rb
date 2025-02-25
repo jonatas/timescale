@@ -65,8 +65,8 @@ RSpec.describe Timescaledb::ContinuousAggregatesHelper do
       expected_config = {
         scope_name: :total,
         select: "count(*) as total",
-        group_by: [],
         where: nil,
+        group_by: [],
         refresh_policy: {
           minute: { start_offset: "10 minutes", end_offset: "1 minute", schedule_interval: "1 minute" },
           hour:   { start_offset: "4 hour",     end_offset: "1 hour",   schedule_interval: "1 hour" },
@@ -74,11 +74,14 @@ RSpec.describe Timescaledb::ContinuousAggregatesHelper do
           month:  { start_offset: "3 month",    end_offset: "1 hour",   schedule_interval: "1 hour" }
         }
       }
+      base_query = test_class::TotalPerMinute.base_query
+      expect(base_query).to eq("SELECT time_bucket('1 minute', ts) as ts, count(*) as total FROM \"hypertable_with_continuous_aggregates\" GROUP BY time_bucket('1 minute', ts)")
       expect(test_class::TotalPerMinute.config).to eq(expected_config)
     end
 
     it "sets the where clause for each aggregate" do
-      expect(test_class::PurchaseStatsPerMinute.config[:where]).to eq("(identifier = 'purchase')")
+      base_query = test_class::PurchaseStatsPerMinute.base_query
+      expect(base_query).to include("WHERE (identifier = 'purchase')")
     end
 
 
